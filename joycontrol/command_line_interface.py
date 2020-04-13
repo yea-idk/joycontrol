@@ -1,13 +1,36 @@
 import inspect
 import logging
+import pygame
+import asyncio
 
 from aioconsole import ainput
 
 from joycontrol.controller_state import button_push, ControllerState
 from joycontrol.transport import NotConnectedError
 
+pygame.init()
+joysticks = []
+clock = pygame.time.Clock()
+keepPlaying = True
+
 logger = logging.getLogger(__name__)
 
+button_map = {
+            0: 'b', # xbox a
+            1: 'a', # xbox b
+            2: 'y', # xbox x
+            3: 'x', # xbox y
+            8: 'home',
+            7: '+',
+            6: '-',
+            5: 'r',
+            4: 'l',
+        }
+
+def pygame_event_loop(loop, event_queue):
+    while True:
+        event = pygame.event.wait()
+        asyncio.run_coroutine_threadsafe(event_queue.put(event), loop=loop)
 
 def _print_doc(string):
     """
@@ -36,11 +59,83 @@ def _print_doc(string):
         for line in lines:
             print(line[prefix_i:] if line.strip() else line)
 
-
 class ControllerCLI:
     def __init__(self, controller_state: ControllerState):
         self.controller_state = controller_state
         self.commands = {}
+        self.gamepad_state_needs_send = False
+
+    async def _handle_gamepad_event(self, event):
+        send_state = False
+        if event.type == pygame.JOYAXISMOTION:
+            if event.axis == 1: # y. 1: down
+                self.controller_state.l_stick_state.set_v_float(event.value)
+                send_state = True
+                pass
+            elif event.axis == 0: # x. 1: right
+                self.controller_state.l_stick_state.set_h_float(event.value)
+                send_state = True
+                pass
+            elif event.axis == 4: # right y. 1: down
+                self.controller_state.r_stick_state.set_v_float(event.value)
+                send_state = True
+                pass
+            elif event.axis == 3: # right x. 1: right
+                self.controller_state.r_stick_state.set_h_float(event.value)
+                send_state = True
+                pass
+            elif event.axis == 5: # r2- -1 unpressed -> 1 fully pressed
+                pass
+            elif event.axis == 2: # r2- -1 unpressed -> 1 fully pressed
+                pass
+        elif event.type == pygame.JOYBUTTONDOWN:
+            if event.button in button_map:
+                b = button_map[event.button]
+                self.controller_state.button_state.set_button(b, True)
+            send_state = True
+
+        elif event.type == pygame.JOYBUTTONUP:
+            if event.button in button_map:
+                b = button_map[event.button]
+                self.controller_state.button_state.set_button(b, False)
+            send_state = True
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.value == (0, 0): # neutral
+                self.controller_state.button_state.set_button('left', False)
+                self.controller_state.button_state.set_button('right', False)
+                self.controller_state.button_state.set_button('up', False)
+                self.controller_state.button_state.set_button('down', False)
+            elif event.value == (1, 0): # right
+                self.controller_state.button_state.set_button('left', False)
+                self.controller_state.button_state.set_button('right', True)
+                self.controller_state.button_state.set_button('up', False)
+                self.controller_state.button_state.set_button('down', False)
+                pass
+            elif event.value == (-1, 0): # left
+                self.controller_state.button_state.set_button('left', True)
+                self.controller_state.button_state.set_button('right', False)
+                self.controller_state.button_state.set_button('up', False)
+                self.controller_state.button_state.set_button('down', False)
+                pass
+            elif event.value == (0, 1): # up
+                self.controller_state.button_state.set_button('left', False)
+                self.controller_state.button_state.set_button('right', False)
+                self.controller_state.button_state.set_button('up', True)
+                self.controller_state.button_state.set_button('down', False)
+                pass
+            elif event.value == (0, -1): # down
+                self.controller_state.button_state.set_button('left', False)
+                self.controller_state.button_state.set_button('right', False)
+                self.controller_state.button_state.set_button('up', False)
+                self.controller_state.button_state.set_button('down', True)
+                pass
+            send_state = True
+
+        if send_state:
+            print(event)
+            self.gamepad_state_needs_send = True
+            #await self.controller_state.send()
 
     async def cmd_help(self):
         print('Button commands:')
@@ -108,12 +203,49 @@ class ControllerCLI:
         else:
             raise ValueError('Value of side must be "l", "left" or "r", "right"')
 
+    async def _send_gamepad_state(self):
+        while True:
+            await asyncio.sleep(1 / 120)
+            if self.gamepad_state_needs_send == True:
+                print("sending state")
+                self.gamepad_state_needs_send = False
+                if self.controller_state != None:
+                    await self.controller_state.send()
+
+    async def _gamepad_poll(self, event_queue):
+        print("begin gamepad polling")
+
+        for i in range(0, pygame.joystick.get_count()):
+            # create an Joystick object in our list
+            joysticks.append(pygame.joystick.Joystick(i))
+            # initialize them all (-1 means loop forever)
+            joysticks[-1].init()
+            # print a statement telling what the name of the controller is
+            print ("Detected joystick "),joysticks[-1].get_name(),"'"
+        while True:
+            event = await event_queue.get()
+            try:
+                await self._handle_gamepad_event(event)
+            except Exception as e:
+                print()
+                print("ERROR in gamepad handling")
+                print(e)
+                print()
+
     def add_command(self, name, command):
         if name in self.commands:
             raise ValueError(f'Command {name} already registered.')
         self.commands[name] = command
 
     async def run(self):
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        event_queue = asyncio.Queue()
+
+        pygame_task = loop.run_in_executor(None, pygame_event_loop, loop, event_queue)
+        gamepad_task = asyncio.ensure_future(self._gamepad_poll(event_queue))
+        send_state_task = asyncio.ensure_future(self._send_gamepad_state())
+
         while True:
             user_input = await ainput(prompt='cmd >> ')
             if not user_input:
@@ -156,3 +288,5 @@ class ControllerCLI:
                 except NotConnectedError:
                     logger.info('Connection was lost.')
                     return
+        await gamepad_task
+        await send_state_task

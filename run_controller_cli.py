@@ -166,7 +166,7 @@ if __name__ == '__main__':
         raise PermissionError('Script must be run as root!')
 
     # setup logging
-    #log.configure(console_level=logging.ERROR)
+    log.configure(console_level=logging.ERROR)
     log.configure()
 
     parser = argparse.ArgumentParser()

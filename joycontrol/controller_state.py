@@ -253,6 +253,31 @@ class StickState:
 
         self._calibration = calibration
 
+    def set_h_float(self, value):
+        print("enter set_h_float")
+        if self._calibration is None:
+            raise ValueError('No calibration data available.')
+        if value >= 0:
+            value = int(round(self._calibration.h_max_above_center * value))
+        else:
+            value = int(round(self._calibration.h_max_below_center * value))
+
+        print(value)
+        self.set_h(self._calibration.h_center + value)
+
+    def set_v_float(self, value):
+        print("enter set_v_float")
+        if self._calibration is None:
+            raise ValueError('No calibration data available.')
+        if value >= 0:
+            value = int(round(self._calibration.v_max_above_center * value))
+        else:
+            value = int(round(self._calibration.v_max_below_center * value))
+
+        print(value)
+        self.set_v(self._calibration.v_center + value)
+        #self.set_v(int(round((value + 1) / 2 * 0x1000)))
+
     def set_h(self, value):
         if not 0 <= value < 0x1000:
             raise ValueError(f'Stick values must be in [0,{0x1000})')
