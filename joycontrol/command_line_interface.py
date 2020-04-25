@@ -16,15 +16,19 @@ keepPlaying = True
 logger = logging.getLogger(__name__)
 
 button_map = {
-            0: 'b', # xbox a
-            1: 'a', # xbox b
-            2: 'y', # xbox x
-            3: 'x', # xbox y
-            8: 'home',
-            7: '+',
-            6: '-',
-            5: 'r',
-            4: 'l',
+            0: 'b', #        cross    b
+            1: 'a', #        circle   a
+            2: 'y', #        square   y
+            3: 'x', #        triangle x
+            4: 'l', #        l1       l
+            5: 'r', #        r1       r
+            6: 'zl', #       l2       zl
+            7: 'zr', #       r2       zr
+            8: 'minus', #    share    -
+            9: 'plus', #     options  +
+            10: 'home', #    ps       home
+            11: 'l_stick', # l3       stick 1
+            12: 'r_stick', # r3       stick 2
         }
 
 def pygame_event_loop(loop, event_queue):
