@@ -81,11 +81,11 @@ class ControllerCLI:
                 send_state = True
                 pass
             elif event.axis == 4: # right y. 1: down
-                self.controller_state.r_stick_state.set_v_float(event.value * -1)
+                self.controller_state.r_stick_state.set_v_float((event.value * -1) - 0.5)
                 send_state = True
                 pass
             elif event.axis == 3: # right x. 1: right
-                self.controller_state.r_stick_state.set_h_float(event.value)
+                self.controller_state.r_stick_state.set_h_float(event.value - 0.5)
                 send_state = True
                 pass
             elif event.axis == 5: # r2- -1 unpressed -> 1 fully pressed
